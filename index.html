@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WC 2026 Predictor - Qualifiers</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🏆 WC 2026 ULTIMATE</div>
+        <div class="links">
+            <a href="index.html" class="active">Qualifiers</a>
+            <a href="groups.html">Group Stage</a>
+            <a href="knockout.html">Knockout</a>
+        </div>
+    </nav>
+
+    <div class="container fade-in">
+        <header class="hero">
+            <h1>Qualifiers & Playoffs</h1>
+            <p>Predict the final 6 spots to unlock the Group Stage.</p>
+        </header>
+
+        <div id="qualifiers-container" class="grid-container">
+            </div>
+
+        <div class="actions">
+            <button onclick="app.randomizeQualifiers()" class="btn secondary">🎲 Randomize</button>
+            <button onclick="app.saveAndGo('groups.html')" class="btn primary">Start Tournament ➔</button>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            app.initQualifiers();
+        });
+    </script>
+</body>
+</html>

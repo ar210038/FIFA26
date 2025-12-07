@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WC 2026 Predictor - Knockout</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">🏆 WC 2026 ULTIMATE</div>
+        <div class="links">
+            <a href="index.html">Qualifiers</a>
+            <a href="groups.html">Group Stage</a>
+            <a href="knockout.html" class="active">Knockout</a>
+        </div>
+    </nav>
+
+    <div class="container fade-in">
+        <header class="hero compact">
+            <h1>Knockout Stage</h1>
+            <p>Click scores to predict. Enter penalties if drawn.</p>
+            <div class="status-bar">
+                <button onclick="app.downloadJSON()" class="btn sm">📥 Save JSON</button>
+                <button onclick="app.downloadImage()" class="btn sm">🖼️ Save Image</button>
+                <button onclick="app.resetAll()" class="btn sm danger">Reset Tournament</button>
+            </div>
+        </header>
+
+        <div class="bracket-wrapper" id="bracket-view">
+            <div class="bracket-container" id="bracket-root">
+                </div>
+        </div>
+    </div>
+
+    <div id="penalty-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Penalty Shootout</h3>
+            <p id="modal-match-info">Team A vs Team B</p>
+            <div class="penalty-inputs">
+                <input type="number" id="pen-a" placeholder="A">
+                <span>-</span>
+                <input type="number" id="pen-b" placeholder="B">
+            </div>
+            <button id="save-penalties" class="btn primary">Save</button>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            app.initKnockout();
+        });
+    </script>
+</body>
+</html>
