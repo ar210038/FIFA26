@@ -467,13 +467,16 @@ const initKnockout = () => {
         const bracket = load(KEY_KNOCKOUT) || {};
         if(!bracket[mid]) bracket[mid] = {};
         
+        // Capture Previous Winner to check for changes
+        const prevWinnerCode = bracket[mid].winner ? bracket[mid].winner.code : null;
+
         // 1. Save Input Values
         if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
         if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
         if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
         if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        // 2. Determine Winner Logic
+        // 2. Determine New Winner
         const matchDiv = document.querySelector(`div[data-mid="${mid}"]`);
         const getTeam = (idx) => {
              const txt = matchDiv.querySelector(`.team-slot:nth-child(${idx+1}) span`).innerText.trim();
@@ -487,6 +490,7 @@ const initKnockout = () => {
             if(s1 > s2) winner = t1;
             else if(s2 > s1) winner = t2;
             else {
+                // Draw logic
                 const p1 = parseInt(bracket[mid].p1), p2 = parseInt(bracket[mid].p2);
                 if(!isNaN(p1) && !isNaN(p2)) winner = p1 > p2 ? t1 : t2;
             }
@@ -495,36 +499,42 @@ const initKnockout = () => {
         bracket[mid].winner = winner;
         save(KEY_KNOCKOUT, bracket);
 
-        if(mid === "R2-0" && winner) celebrate(winner);
+        const newWinnerCode = winner ? winner.code : null;
 
-        // --- SCROLL FIX START ---
-        // Capture current scroll positions
-        const wrapper = document.querySelector('.bracket-wrapper');
-        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-        const wrapperX = wrapper ? wrapper.scrollLeft : 0;
-        const wrapperY = wrapper ? wrapper.scrollTop : 0;
+        // --- OPTIMIZATION START ---
+        // ONLY re-render if the winner changed (or we went to/from a draw)
+        // This prevents the keyboard from closing while you are just typing numbers.
+        if (prevWinnerCode !== newWinnerCode) {
+            
+            if(mid === "R2-0" && winner) celebrate(winner);
 
-        // Re-render the bracket
-        initKnockout(); 
+            // Capture Scroll
+            const wrapper = document.querySelector('.bracket-wrapper');
+            const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+            const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+            const wrapperX = wrapper ? wrapper.scrollLeft : 0;
+            const wrapperY = wrapper ? wrapper.scrollTop : 0;
 
-        // Restore scroll positions immediately
-        window.scrollTo(scrollX, scrollY);
-        if(wrapper) {
-            wrapper.scrollLeft = wrapperX;
-            wrapper.scrollTop = wrapperY;
+            // Re-render
+            initKnockout(); 
+
+            // Restore Scroll
+            window.scrollTo(scrollX, scrollY);
+            if(wrapper) {
+                wrapper.scrollLeft = wrapperX;
+                wrapper.scrollTop = wrapperY;
+            }
+
+            // Restore Focus
+            const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
+            if(nextInput) { 
+                nextInput.focus(); 
+                const val = nextInput.value;
+                nextInput.value = '';
+                nextInput.value = val;
+            }
         }
-        // --- SCROLL FIX END ---
-
-        // Restore Focus to the input you were typing in
-        const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
-        if(nextInput) { 
-            nextInput.focus(); 
-            // set selection range to end to prevent cursor jumping to start
-            const val = nextInput.value;
-            nextInput.value = '';
-            nextInput.value = val;
-        }
+        // --- OPTIMIZATION END ---
     };
 
     const resetAll = () => { if(confirm("Reset Tournament?")) { localStorage.clear(); location.href="index.html"; } };
@@ -590,3 +600,4 @@ const initKnockout = () => {
     };
 
 })();
+
