@@ -255,6 +255,7 @@ body {
     align-items: center;
     gap: 30px; /* Adjust space between the two large boxes */
 }
+.hidden { display: none !important; }
 /* --- MOBILE RESPONSIVENESS & TOUCH FIXES --- */
 @media (max-width: 768px) {
     /* 1. Stack the Navbar */
