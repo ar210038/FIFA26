@@ -462,12 +462,12 @@ const initKnockout = () => {
         }
     };
 
-    const updateKnockout = (el) => {
+const updateKnockout = (el) => {
         const mid = el.dataset.mid;
         const bracket = load(KEY_KNOCKOUT) || {};
         if(!bracket[mid]) bracket[mid] = {};
         
-        // Capture Previous Winner to check for changes
+        // Capture Previous Winner
         const prevWinnerCode = bracket[mid].winner ? bracket[mid].winner.code : null;
 
         // 1. Save Input Values
@@ -476,7 +476,7 @@ const initKnockout = () => {
         if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
         if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        // 2. Determine New Winner
+        // 2. Determine Winner Logic
         const matchDiv = document.querySelector(`div[data-mid="${mid}"]`);
         const getTeam = (idx) => {
              const txt = matchDiv.querySelector(`.team-slot:nth-child(${idx+1}) span`).innerText.trim();
@@ -490,7 +490,6 @@ const initKnockout = () => {
             if(s1 > s2) winner = t1;
             else if(s2 > s1) winner = t2;
             else {
-                // Draw logic
                 const p1 = parseInt(bracket[mid].p1), p2 = parseInt(bracket[mid].p2);
                 if(!isNaN(p1) && !isNaN(p2)) winner = p1 > p2 ? t1 : t2;
             }
@@ -502,37 +501,45 @@ const initKnockout = () => {
         const newWinnerCode = winner ? winner.code : null;
 
         // --- OPTIMIZATION START ---
-        // ONLY re-render if the winner changed (or we went to/from a draw)
-        // This prevents the keyboard from closing while you are just typing numbers.
         if (prevWinnerCode !== newWinnerCode) {
             
             if(mid === "R2-0" && winner) celebrate(winner);
 
-            // Capture Scroll
+            // 1. PREVENT JUMP: Lock the height of the container so page doesn't shrink
+            const root = document.getElementById('bracket-root');
+            const currentHeight = root.offsetHeight;
+            root.style.minHeight = currentHeight + 'px';
+
+            // 2. CAPTURE SCROLL POSITIONS
             const wrapper = document.querySelector('.bracket-wrapper');
-            const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-            const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollX = window.scrollX;
+            const scrollY = window.scrollY;
             const wrapperX = wrapper ? wrapper.scrollLeft : 0;
             const wrapperY = wrapper ? wrapper.scrollTop : 0;
 
-            // Re-render
+            // 3. RE-RENDER
             initKnockout(); 
 
-            // Restore Scroll
+            // 4. RESTORE SCROLL IMMEDIATELY
             window.scrollTo(scrollX, scrollY);
             if(wrapper) {
                 wrapper.scrollLeft = wrapperX;
                 wrapper.scrollTop = wrapperY;
             }
 
-            // Restore Focus
-            const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
-            if(nextInput) { 
-                nextInput.focus(); 
-                const val = nextInput.value;
-                nextInput.value = '';
-                nextInput.value = val;
-            }
+            // 5. RESTORE FOCUS & UNLOCK HEIGHT (Next Frame)
+            requestAnimationFrame(() => {
+                // Release the height lock
+                root.style.minHeight = ''; 
+
+                const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
+                if(nextInput) { 
+                    nextInput.focus(); 
+                    const val = nextInput.value;
+                    nextInput.value = '';
+                    nextInput.value = val;
+                }
+            });
         }
         // --- OPTIMIZATION END ---
     };
@@ -600,4 +607,5 @@ const initKnockout = () => {
     };
 
 })();
+
 
