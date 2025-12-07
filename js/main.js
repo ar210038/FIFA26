@@ -272,306 +272,228 @@ const app = (() => {
         {id: 13, h: "1J", a: "2E"}, {id: 14, h: "1B", a: "3E"},
         {id: 15, h: "1H", a: "2F"}, {id: 16, h: "2G", a: "3I"} 
     ];
-const initKnockout = () => {
-        try {
-            const root = document.getElementById('bracket-root');
-            if(!root) return;
+// 1. GENERATE BRACKET HTML (Runs ONCE on load)
+    const initKnockout = () => {
+        const root = document.getElementById('bracket-root');
+        if(!root) return;
 
-            const { standings, thirds } = calculateAllStandings();
-            
-            // --- BEST 3RD PLACE MAPPING LOGIC ---
-            // 1. Get the Top 8 Third Place Teams
-            const best8 = thirds.slice(0, 8);
-            
-            // 2. Identify the 8 slots in the R32 bracket that expect a 3rd place team
-            // (These are hardcoded in R32_STRUCTURE)
-            const thirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
-            
-            // 3. Create a map to assign teams to slots
-            const thirdMap = {};
-            const assignedTeams = new Set();
-            const filledSlots = new Set();
+        const { standings, thirds } = calculateAllStandings();
+        
+        // --- BEST 3RD LOGIC ---
+        const best8 = thirds.slice(0, 8);
+        const thirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
+        const thirdMap = {};
+        const assignedTeams = new Set();
+        const filledSlots = new Set();
 
-            // Pass 1: Direct Matches (If 3A qualifies and there is a 3A slot, put them there)
-            best8.forEach(team => {
-                const key = "3" + team.group;
-                if(thirdSlots.includes(key)) {
-                    thirdMap[key] = team;
-                    assignedTeams.add(team.group);
-                    filledSlots.add(key);
-                }
-            });
+        best8.forEach(team => {
+            const key = "3" + team.group;
+            if(thirdSlots.includes(key)) {
+                thirdMap[key] = team;
+                assignedTeams.add(team.group);
+                filledSlots.add(key);
+            }
+        });
+        const remainingTeams = best8.filter(t => !assignedTeams.has(t.group));
+        const remainingSlots = thirdSlots.filter(s => !filledSlots.has(s));
+        remainingSlots.forEach((slot, idx) => { if(remainingTeams[idx]) thirdMap[slot] = remainingTeams[idx]; });
 
-            // Pass 2: Fill Gaps (Put remaining qualified teams into remaining empty slots)
-            const remainingTeams = best8.filter(t => !assignedTeams.has(t.group));
-            const remainingSlots = thirdSlots.filter(s => !filledSlots.has(s));
+        const getT = (key) => {
+            if(!key) return {code: "TBD", name:"TBD", flag: "TBD"};
+            if(key.startsWith('3')) return thirdMap[key] || {code: "TBD", name:"TBD", flag: "TBD"};
+            return standings[key] || {code: "TBD", name: "TBD", flag: "TBD"};
+        };
+        // ---------------------
 
-            remainingSlots.forEach((slot, idx) => {
-                if(remainingTeams[idx]) {
-                    thirdMap[slot] = remainingTeams[idx];
-                }
-            });
-            // ------------------------------------
+        const bracketData = load(KEY_KNOCKOUT) || {};
+        const rounds = [32, 16, 8, 4, 2];
+        let html = '';
 
-            const getT = (key) => {
-                if(!key) return {code: "TBD", name:"TBD", flag: "TBD"};
+        rounds.forEach((cnt) => {
+            html += `<div class="round" id="round-${cnt}">`;
+            const matchCount = cnt / 2;
+            for(let i=0; i<matchCount; i++) {
+                let mId = `R${cnt}-${i}`;
+                let match = bracketData[mId] || {};
                 
-                // If it's a 3rd place slot, check our new map
-                if(key.startsWith('3')) {
-                    if(thirdMap[key]) return thirdMap[key];
-                    // Fallback just in case logic misses something
-                    return {code: "TBD", name:"TBD", flag: "TBD"};
-                }
-                
-                // Standard group winner/runner-up
-                return standings[key] || {code: "TBD", name: "TBD", flag: "TBD"};
-            };
-
-            const bracketData = load(KEY_KNOCKOUT) || {};
-            const rounds = [32, 16, 8, 4, 2];
-            let html = '';
-
-            rounds.forEach((cnt) => {
-                html += `<div class="round" id="round-${cnt}">`;
-                const matchCount = cnt / 2;
-                
-                // Generate Matches for this Round
-                for(let i=0; i<matchCount; i++) {
-                    let mId = `R${cnt}-${i}`;
-                    let match = bracketData[mId] || {};
-                    let t1, t2;
-
-                    if(cnt === 32) {
-                        const setup = R32_STRUCTURE[i];
-                        t1 = getT(setup.h);
-                        t2 = getT(setup.a);
-                    } else {
-                        const prevCnt = cnt * 2;
-                        const w1 = bracketData[`R${prevCnt}-${i*2}`]?.winner;
-                        const w2 = bracketData[`R${prevCnt}-${(i*2)+1}`]?.winner;
-                        t1 = w1 || {code: "TBD", name: "Match "+(i*2+1), flag: "TBD"};
-                        t2 = w2 || {code: "TBD", name: "Match "+(i*2+2), flag: "TBD"};
-                    }
-
-                    const s1 = match.s1 !== undefined ? match.s1 : '';
-                    const s2 = match.s2 !== undefined ? match.s2 : '';
-                    const p1 = match.p1 !== undefined ? match.p1 : '';
-                    const p2 = match.p2 !== undefined ? match.p2 : '';
-                    
-                    const isDraw = (s1 !== '' && s2 !== '' && s1 == s2);
-                    const wClass1 = (match.winner?.code === t1.code && t1.code !== "TBD") ? "winner" : "";
-                    const wClass2 = (match.winner?.code === t2.code && t2.code !== "TBD") ? "winner" : "";
-
-                    // --- FINAL MATCH (GOLD BOX) ---
-                    if (cnt === 2) {
-                        html += `
-                        <div class="final-match-wrapper">
-                            <h3>🏆 WORLD CUP FINAL 🏆</h3>
-                            <div class="matchup" data-mid="${mId}">
-                                <div class="team-slot ${wClass1}">
-                                    <span><img src="${getFlag(t1.flag)}" class="flag"> ${t1.code}</span>
-                                    <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                        <input type="number" class="score-input k-input" value="${s1}" data-mid="${mId}" data-idx="1" oninput="app.updateKnockout(this)">
-                                        ${isDraw ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p1}" data-mid="${mId}" data-pidx="1" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                    </div>
-                                </div>
-                                <div class="team-slot ${wClass2}">
-                                    <span><img src="${getFlag(t2.flag)}" class="flag"> ${t2.code}</span>
-                                    <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                        <input type="number" class="score-input k-input" value="${s2}" data-mid="${mId}" data-idx="2" oninput="app.updateKnockout(this)">
-                                        ${isDraw ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p2}" data-mid="${mId}" data-pidx="2" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>`;
-                    } 
-                    // --- STANDARD MATCH ---
-                    else {
-                        html += `
-                        <div class="matchup" data-mid="${mId}">
-                            <div class="team-slot ${wClass1}">
-                                <span><img src="${getFlag(t1.flag)}" class="flag"> ${t1.code}</span>
-                                <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                    <input type="number" class="score-input k-input" value="${s1}" data-mid="${mId}" data-idx="1" oninput="app.updateKnockout(this)">
-                                    ${isDraw ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p1}" data-mid="${mId}" data-pidx="1" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                </div>
-                            </div>
-                            <div class="team-slot ${wClass2}">
-                                <span><img src="${getFlag(t2.flag)}" class="flag"> ${t2.code}</span>
-                                <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                    <input type="number" class="score-input k-input" value="${s2}" data-mid="${mId}" data-idx="2" oninput="app.updateKnockout(this)">
-                                    ${isDraw ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p2}" data-mid="${mId}" data-pidx="2" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                </div>
-                            </div>
-                        </div>`;
-                    }
+                // Initial load logic (Visuals updated later by refreshVisuals)
+                let t1, t2;
+                if(cnt === 32) {
+                    const setup = R32_STRUCTURE[i];
+                    t1 = getT(setup.h);
+                    t2 = getT(setup.a);
+                } else {
+                    t1 = {code: "Match "+(i*2+1), flag: "TBD"};
+                    t2 = {code: "Match "+(i*2+2), flag: "TBD"};
                 }
 
-                // --- 3RD PLACE MATCH (INJECTED BELOW FINAL) ---
+                const s1 = match.s1||'', s2 = match.s2||'', p1 = match.p1||'', p2 = match.p2||'';
+                const isDraw = (s1 !== '' && s2 !== '' && s1 == s2);
+                
+                // HTML Structure
+                const title = cnt === 2 ? "<h3>🏆 WORLD CUP FINAL 🏆</h3>" : "";
+                const wrapperClass = cnt === 2 ? "final-match-wrapper" : "matchup";
+                
+                // Note: We use 'final-match-wrapper' as a wrapper DIV for the final, but standard 'matchup' class for others
                 if(cnt === 2) {
-                    const mSemi1 = bracketData["R4-0"];
-                    const mSemi2 = bracketData["R4-1"];
-                    let t3_1 = {code:"TBD", flag:"TBD"}, t3_2 = {code:"TBD", flag:"TBD"};
-
-                    // Determine losers of Semis
-                    if(mSemi1 && mSemi1.winner) {
-                        const wQ1 = bracketData["R8-0"]?.winner; 
-                        const wQ2 = bracketData["R8-1"]?.winner;
-                        if(wQ1 && wQ2) t3_1 = (mSemi1.winner.code === wQ1.code) ? wQ2 : wQ1;
-                    }
-                    if(mSemi2 && mSemi2.winner) {
-                        const wQ3 = bracketData["R8-2"]?.winner; 
-                        const wQ4 = bracketData["R8-3"]?.winner;
-                        if(wQ3 && wQ4) t3_2 = (mSemi2.winner.code === wQ3.code) ? wQ4 : wQ3;
-                    }
-
-                    const m3rd = bracketData["Match3rd"] || {};
-                    const s3_1 = m3rd.s1 || '', s3_2 = m3rd.s2 || '';
-                    const p3_1 = m3rd.p1 || '', p3_2 = m3rd.p2 || '';
-                    const isDraw3 = (s3_1 !== '' && s3_2 !== '' && s3_1 == s3_2);
-
                     html += `
-                    <div class="third-place-wrapper">
-                        <h3>🥉 3rd Place Play-off</h3>
-                        <div class="matchup" data-mid="Match3rd">
-                             <div class="team-slot ${m3rd.winner?.code === t3_1.code && t3_1.code !== "TBD" ? 'winner' : ''}">
-                                <span><img src="${getFlag(t3_1.flag)}" class="flag"> ${t3_1.code}</span>
-                                <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                    <input type="number" class="score-input k-input" value="${s3_1}" data-mid="Match3rd" data-idx="1" oninput="app.updateKnockout(this)">
-                                    ${isDraw3 ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p3_1}" data-mid="Match3rd" data-pidx="1" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                </div>
-                            </div>
-                            <div class="team-slot ${m3rd.winner?.code === t3_2.code && t3_2.code !== "TBD" ? 'winner' : ''}">
-                                <span><img src="${getFlag(t3_2.flag)}" class="flag"> ${t3_2.code}</span>
-                                <div style="display:flex; flex-direction:column; align-items:flex-end">
-                                    <input type="number" class="score-input k-input" value="${s3_2}" data-mid="Match3rd" data-idx="2" oninput="app.updateKnockout(this)">
-                                    ${isDraw3 ? `<input type="number" class="score-input k-input pen-input" placeholder="P" value="${p3_2}" data-mid="Match3rd" data-pidx="2" oninput="app.updateKnockout(this)" style="margin-top:2px;">` : ''}
-                                </div>
-                            </div>
+                    <div class="final-match-wrapper">
+                        ${title}
+                        <div class="matchup" data-mid="${mId}">
+                            ${generateMatchHTML(mId, t1, t2, s1, s2, p1, p2, isDraw)}
                         </div>
                     </div>`;
+                } else {
+                    html += `
+                    <div class="matchup" data-mid="${mId}">
+                        ${generateMatchHTML(mId, t1, t2, s1, s2, p1, p2, isDraw)}
+                    </div>`;
                 }
+            }
 
-                html += `</div>`; // Close Round Div
-            });
-
-            root.innerHTML = html;
-        } catch(e) {
-            console.error(e);
-            document.getElementById('bracket-root').innerHTML = `<p style='color:white'>Error loading bracket: ${e.message}</p>`;
-        }
+            // 3rd Place Match (Under Final)
+            if(cnt === 2) {
+                const m3 = bracketData["Match3rd"] || {};
+                const s3_1=m3.s1||'', s3_2=m3.s2||'', p3_1=m3.p1||'', p3_2=m3.p2||'';
+                const d3 = (s3_1!=='' && s3_2!=='' && s3_1==s3_2);
+                
+                html += `
+                <div class="third-place-wrapper">
+                    <h3>🥉 3rd Place Play-off</h3>
+                    <div class="matchup" data-mid="Match3rd">
+                        ${generateMatchHTML("Match3rd", {code:"TBD", flag:"TBD"}, {code:"TBD", flag:"TBD"}, s3_1, s3_2, p3_1, p3_2, d3)}
+                    </div>
+                </div>`;
+            }
+            html += `</div>`;
+        });
+        root.innerHTML = html;
+        refreshVisuals(); // Update names/flags without breaking focus
     };
 
-const updateKnockout = (el) => {
+    // Helper for initKnockout to keep code clean
+    const generateMatchHTML = (mid, t1, t2, s1, s2, p1, p2, isDraw) => {
+        return `
+        <div class="team-slot">
+            <span><img src="${getFlag(t1.flag)}" class="flag"> ${t1.code}</span>
+            <div style="display:flex; flex-direction:column; align-items:flex-end">
+                <input type="number" class="score-input k-input" value="${s1}" data-mid="${mid}" data-idx="1" oninput="app.updateKnockout(this)">
+                <input type="number" class="score-input k-input pen-input ${isDraw?'':'hidden'}" placeholder="P" value="${p1}" data-mid="${mid}" data-pidx="1" oninput="app.updateKnockout(this)" style="margin-top:2px;">
+            </div>
+        </div>
+        <div class="team-slot">
+            <span><img src="${getFlag(t2.flag)}" class="flag"> ${t2.code}</span>
+            <div style="display:flex; flex-direction:column; align-items:flex-end">
+                <input type="number" class="score-input k-input" value="${s2}" data-mid="${mid}" data-idx="2" oninput="app.updateKnockout(this)">
+                <input type="number" class="score-input k-input pen-input ${isDraw?'':'hidden'}" placeholder="P" value="${p2}" data-mid="${mid}" data-pidx="2" oninput="app.updateKnockout(this)" style="margin-top:2px;">
+            </div>
+        </div>`;
+    };
+
+    // 2. LIVE UPDATER (Does not rebuild HTML, keeps keyboard open)
+    const updateKnockout = (el) => {
         const mid = el.dataset.mid;
         const bracket = load(KEY_KNOCKOUT) || {};
         if(!bracket[mid]) bracket[mid] = {};
         
-        // 1. Save Input Values
         if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
         if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
         if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
         if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        // 2. Determine Winner
-        const matchDiv = document.querySelector(`div[data-mid="${mid}"]`);
-        const getTeam = (idx) => {
-             const txt = matchDiv.children[idx].querySelector('span').innerText.trim();
-             return { code: txt, flag: txt.toLowerCase() };
-        };
-        const t1 = getTeam(0); const t2 = getTeam(1);
+        // Calc Winner for Celebration
         const s1 = parseInt(bracket[mid].s1), s2 = parseInt(bracket[mid].s2);
-        
-        let winner = null;
-        if(!isNaN(s1) && !isNaN(s2)) {
-            if(s1 > s2) winner = t1;
-            else if(s2 > s1) winner = t2;
-            else {
-                const p1 = parseInt(bracket[mid].p1), p2 = parseInt(bracket[mid].p2);
-                if(!isNaN(p1) && !isNaN(p2)) winner = p1 > p2 ? t1 : t2;
-            }
+        if(mid === "R2-0" && !isNaN(s1) && !isNaN(s2) && s1 !== s2) {
+             // Simple celebration trigger (text updates via UI)
+             celebrate({code: "CHAMPION"}); 
         }
-        
-        // Check if winner changed to trigger updates
-        const prevWinnerCode = bracket[mid].winner ? bracket[mid].winner.code : null;
-        bracket[mid].winner = winner;
+
         save(KEY_KNOCKOUT, bracket);
+        refreshVisuals(); // Update text/colors only
+    };
 
-        const newWinnerCode = winner ? winner.code : null;
+    // 3. VISUAL REFRESHER (Updates DOM attributes only)
+    const refreshVisuals = () => {
+        const bracket = load(KEY_KNOCKOUT) || {};
+        const rounds = [32, 16, 8, 4, 2];
+        
+        rounds.forEach(cnt => {
+            const matchCount = cnt / 2;
+            for(let i=0; i<matchCount; i++) {
+                let mId = `R${cnt}-${i}`;
+                let match = bracket[mId] || {};
+                let div = document.querySelector(`div[data-mid="${mId}"]`);
+                if(!div) continue;
 
-        // --- SURGICAL DOM UPDATE (No Re-render) ---
-        // This ensures keyboard stays open and scroll stays put
-        if (prevWinnerCode !== newWinnerCode) {
-            
-            // A. Update visual winner class on CURRENT match
-            const slot1 = matchDiv.children[0];
-            const slot2 = matchDiv.children[1];
-            slot1.classList.remove('winner');
-            slot2.classList.remove('winner');
-            
-            if (winner) {
-                if (winner.code === t1.code) slot1.classList.add('winner');
-                else if (winner.code === t2.code) slot2.classList.add('winner');
-            }
-
-            // B. Trigger Celebration if Final
-            if(mid === "R2-0" && winner) celebrate(winner);
-
-            // C. Find and Update the NEXT match slot
-            // Parse current ID: "R32-0" -> Round 32, Match 0
-            const parts = mid.split('-');
-            if (parts.length === 2 && mid.startsWith('R')) {
-                const round = parseInt(parts[0].substring(1)); // 32
-                const matchIdx = parseInt(parts[1]); // 0
+                const s1 = parseInt(match.s1), s2 = parseInt(match.s2);
+                const isDraw = (!isNaN(s1) && !isNaN(s2) && s1 === s2);
                 
-                if (round > 2) { // If not the final
-                    const nextRound = round / 2; // 16
-                    const nextMatchIdx = Math.floor(matchIdx / 2); // 0
-                    const nextSlotIdx = matchIdx % 2; // 0 (Top) or 1 (Bottom)
-                    const nextMid = `R${nextRound}-${nextMatchIdx}`;
-                    
-                    const nextMatchDiv = document.querySelector(`div[data-mid="${nextMid}"]`);
-                    if(nextMatchDiv) {
-                        const targetSlot = nextMatchDiv.children[nextSlotIdx];
-                        const span = targetSlot.querySelector('span');
-                        
-                        // Update the text and flag
-                        if (winner) {
-                            span.innerHTML = `<img src="${getFlag(winner.flag)}" class="flag"> ${winner.code}`;
-                        } else {
-                            // Reset to TBD if scores cleared
-                            span.innerHTML = `<img src="${getFlag('TBD')}" class="flag"> Match ${matchIdx+1}`;
+                // Show/Hide Penalty Inputs
+                div.querySelectorAll('.pen-input').forEach(p => p.classList.toggle('hidden', !isDraw));
+
+                // Determine Winner Visuals
+                let wIdx = -1;
+                if(!isNaN(s1) && !isNaN(s2)) {
+                    if(s1 > s2) wIdx = 0; else if(s2 > s1) wIdx = 1;
+                    else {
+                        const p1 = parseInt(match.p1), p2 = parseInt(match.p2);
+                        if(!isNaN(p1) && !isNaN(p2)) wIdx = p1 > p2 ? 0 : 1;
+                    }
+                }
+
+                // Highlight Slots
+                const slots = div.querySelectorAll('.team-slot');
+                if(slots.length >= 2) {
+                    slots[0].classList.toggle('winner', wIdx === 0);
+                    slots[1].classList.toggle('winner', wIdx === 1);
+
+                    // Push Winner Name to Next Round
+                    if(wIdx !== -1 && cnt > 2) {
+                        const wName = slots[wIdx].querySelector('span').innerHTML;
+                        const nextDiv = document.querySelector(`div[data-mid="R${cnt/2}-${Math.floor(i/2)}"]`);
+                        if(nextDiv) {
+                            const nextSlot = nextDiv.querySelectorAll('.team-slot')[i%2];
+                            if(nextSlot) nextSlot.querySelector('span').innerHTML = wName;
                         }
                     }
                 }
             }
+        });
 
-            // D. Special Handling for 3rd Place Match
-            // If Semi-Finals (R4-0 or R4-1) change, we update the 3rd place match
-            if (mid === "R4-0" || mid === "R4-1") {
-                // We must re-calculate the Semi-Final Losers
-                const m3rdDiv = document.querySelector(`div[data-mid="Match3rd"]`);
-                if (m3rdDiv) {
-                    // This is complex to patch surgically, so for 3rd place ONLY, 
-                    // we re-run the full init logic but we don't care about jump 
-                    // because 3rd place is at the bottom.
-                    // However, to be safe, let's try to patch it.
-                    // Actually, simpler strategy: 
-                    // If it's a semi-final, just re-render the whole thing. 
-                    // It's rare enough and at the end of the bracket.
-                    initKnockout();
-                    
-                    // Restore focus after re-render (since we did a full render)
-                    const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
-                    if(nextInput) { 
-                        nextInput.focus(); 
-                        nextInput.value = el.value; 
-                    }
-                    return; // Exit here
+        // 3rd Place Special Logic
+        const mSemi1 = document.querySelector('div[data-mid="R4-0"]');
+        const mSemi2 = document.querySelector('div[data-mid="R4-1"]');
+        const m3rd = document.querySelector('div[data-mid="Match3rd"]');
+        
+        if(mSemi1 && mSemi2 && m3rd) {
+            const getLoserHTML = (div) => {
+                if(div.querySelector('.team-slot:nth-child(1)').classList.contains('winner')) 
+                    return div.querySelector('.team-slot:nth-child(2) span').innerHTML;
+                if(div.querySelector('.team-slot:nth-child(2)').classList.contains('winner')) 
+                    return div.querySelector('.team-slot:nth-child(1) span').innerHTML;
+                return `<img src="${getFlag('TBD')}" class="flag"> TBD`;
+            };
+            
+            m3rd.querySelectorAll('.team-slot')[0].querySelector('span').innerHTML = getLoserHTML(mSemi1);
+            m3rd.querySelectorAll('.team-slot')[1].querySelector('span').innerHTML = getLoserHTML(mSemi2);
+            
+            // Highlight 3rd Place Winner
+            const m3 = bracket["Match3rd"] || {};
+            const s1 = parseInt(m3.s1), s2 = parseInt(m3.s2);
+            const isDraw = (!isNaN(s1) && !isNaN(s2) && s1 === s2);
+            m3rd.querySelectorAll('.pen-input').forEach(p => p.classList.toggle('hidden', !isDraw));
+            
+            let wIdx = -1;
+            if(!isNaN(s1) && !isNaN(s2)) {
+                if(s1 > s2) wIdx = 0; else if(s2 > s1) wIdx = 1;
+                else {
+                    const p1 = parseInt(m3.p1), p2 = parseInt(m3.p2);
+                    if(!isNaN(p1) && !isNaN(p2)) wIdx = p1 > p2 ? 0 : 1;
                 }
             }
+            m3rd.querySelectorAll('.team-slot')[0].classList.toggle('winner', wIdx===0);
+            m3rd.querySelectorAll('.team-slot')[1].classList.toggle('winner', wIdx===1);
         }
-        // --- END SURGICAL UPDATE ---
     };
 
     const resetAll = () => { if(confirm("Reset Tournament?")) { localStorage.clear(); location.href="index.html"; } };
@@ -635,8 +557,4 @@ const updateKnockout = (el) => {
         saveAndGo: (u) => location.href=u,
         finalizeGroups: () => location.href="knockout.html"
     };
-
 })();
-
-
-
