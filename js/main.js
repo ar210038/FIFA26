@@ -467,19 +467,16 @@ const updateKnockout = (el) => {
         const bracket = load(KEY_KNOCKOUT) || {};
         if(!bracket[mid]) bracket[mid] = {};
         
-        // Capture Previous Winner
-        const prevWinnerCode = bracket[mid].winner ? bracket[mid].winner.code : null;
-
         // 1. Save Input Values
         if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
         if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
         if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
         if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        // 2. Determine Winner Logic
+        // 2. Determine Winner
         const matchDiv = document.querySelector(`div[data-mid="${mid}"]`);
         const getTeam = (idx) => {
-             const txt = matchDiv.querySelector(`.team-slot:nth-child(${idx+1}) span`).innerText.trim();
+             const txt = matchDiv.children[idx].querySelector('span').innerText.trim();
              return { code: txt, flag: txt.toLowerCase() };
         };
         const t1 = getTeam(0); const t2 = getTeam(1);
@@ -495,53 +492,86 @@ const updateKnockout = (el) => {
             }
         }
         
+        // Check if winner changed to trigger updates
+        const prevWinnerCode = bracket[mid].winner ? bracket[mid].winner.code : null;
         bracket[mid].winner = winner;
         save(KEY_KNOCKOUT, bracket);
 
         const newWinnerCode = winner ? winner.code : null;
 
-        // --- OPTIMIZATION START ---
+        // --- SURGICAL DOM UPDATE (No Re-render) ---
+        // This ensures keyboard stays open and scroll stays put
         if (prevWinnerCode !== newWinnerCode) {
             
-            if(mid === "R2-0" && winner) celebrate(winner);
-
-            // 1. PREVENT JUMP: Lock the height of the container so page doesn't shrink
-            const root = document.getElementById('bracket-root');
-            const currentHeight = root.offsetHeight;
-            root.style.minHeight = currentHeight + 'px';
-
-            // 2. CAPTURE SCROLL POSITIONS
-            const wrapper = document.querySelector('.bracket-wrapper');
-            const scrollX = window.scrollX;
-            const scrollY = window.scrollY;
-            const wrapperX = wrapper ? wrapper.scrollLeft : 0;
-            const wrapperY = wrapper ? wrapper.scrollTop : 0;
-
-            // 3. RE-RENDER
-            initKnockout(); 
-
-            // 4. RESTORE SCROLL IMMEDIATELY
-            window.scrollTo(scrollX, scrollY);
-            if(wrapper) {
-                wrapper.scrollLeft = wrapperX;
-                wrapper.scrollTop = wrapperY;
+            // A. Update visual winner class on CURRENT match
+            const slot1 = matchDiv.children[0];
+            const slot2 = matchDiv.children[1];
+            slot1.classList.remove('winner');
+            slot2.classList.remove('winner');
+            
+            if (winner) {
+                if (winner.code === t1.code) slot1.classList.add('winner');
+                else if (winner.code === t2.code) slot2.classList.add('winner');
             }
 
-            // 5. RESTORE FOCUS & UNLOCK HEIGHT (Next Frame)
-            requestAnimationFrame(() => {
-                // Release the height lock
-                root.style.minHeight = ''; 
+            // B. Trigger Celebration if Final
+            if(mid === "R2-0" && winner) celebrate(winner);
 
-                const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
-                if(nextInput) { 
-                    nextInput.focus(); 
-                    const val = nextInput.value;
-                    nextInput.value = '';
-                    nextInput.value = val;
+            // C. Find and Update the NEXT match slot
+            // Parse current ID: "R32-0" -> Round 32, Match 0
+            const parts = mid.split('-');
+            if (parts.length === 2 && mid.startsWith('R')) {
+                const round = parseInt(parts[0].substring(1)); // 32
+                const matchIdx = parseInt(parts[1]); // 0
+                
+                if (round > 2) { // If not the final
+                    const nextRound = round / 2; // 16
+                    const nextMatchIdx = Math.floor(matchIdx / 2); // 0
+                    const nextSlotIdx = matchIdx % 2; // 0 (Top) or 1 (Bottom)
+                    const nextMid = `R${nextRound}-${nextMatchIdx}`;
+                    
+                    const nextMatchDiv = document.querySelector(`div[data-mid="${nextMid}"]`);
+                    if(nextMatchDiv) {
+                        const targetSlot = nextMatchDiv.children[nextSlotIdx];
+                        const span = targetSlot.querySelector('span');
+                        
+                        // Update the text and flag
+                        if (winner) {
+                            span.innerHTML = `<img src="${getFlag(winner.flag)}" class="flag"> ${winner.code}`;
+                        } else {
+                            // Reset to TBD if scores cleared
+                            span.innerHTML = `<img src="${getFlag('TBD')}" class="flag"> Match ${matchIdx+1}`;
+                        }
+                    }
                 }
-            });
+            }
+
+            // D. Special Handling for 3rd Place Match
+            // If Semi-Finals (R4-0 or R4-1) change, we update the 3rd place match
+            if (mid === "R4-0" || mid === "R4-1") {
+                // We must re-calculate the Semi-Final Losers
+                const m3rdDiv = document.querySelector(`div[data-mid="Match3rd"]`);
+                if (m3rdDiv) {
+                    // This is complex to patch surgically, so for 3rd place ONLY, 
+                    // we re-run the full init logic but we don't care about jump 
+                    // because 3rd place is at the bottom.
+                    // However, to be safe, let's try to patch it.
+                    // Actually, simpler strategy: 
+                    // If it's a semi-final, just re-render the whole thing. 
+                    // It's rare enough and at the end of the bracket.
+                    initKnockout();
+                    
+                    // Restore focus after re-render (since we did a full render)
+                    const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
+                    if(nextInput) { 
+                        nextInput.focus(); 
+                        nextInput.value = el.value; 
+                    }
+                    return; // Exit here
+                }
+            }
         }
-        // --- OPTIMIZATION END ---
+        // --- END SURGICAL UPDATE ---
     };
 
     const resetAll = () => { if(confirm("Reset Tournament?")) { localStorage.clear(); location.href="index.html"; } };
@@ -607,5 +637,6 @@ const updateKnockout = (el) => {
     };
 
 })();
+
 
 
