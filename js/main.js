@@ -465,65 +465,65 @@ const initKnockout = () => {
     const updateKnockout = (el) => {
         const mid = el.dataset.mid;
         const bracket = load(KEY_KNOCKOUT) || {};
-        
         if(!bracket[mid]) bracket[mid] = {};
         
-        // Update values based on what input changed
+        // 1. Save Input Values
         if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
         if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
         if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
         if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        const s1 = parseInt(bracket[mid].s1);
-        const s2 = parseInt(bracket[mid].s2);
-
-        // Determine Winner Logic
-        // We need to fetch the team codes currently in this slot
-        // Safest is to get them from the DOM to avoid re-calculating the whole tree just for this
+        // 2. Determine Winner Logic
         const matchDiv = document.querySelector(`div[data-mid="${mid}"]`);
-        const getTeam = (slotIdx) => {
-             const txt = matchDiv.children[slotIdx].querySelector('span').innerText.trim();
+        const getTeam = (idx) => {
+             const txt = matchDiv.querySelector(`.team-slot:nth-child(${idx+1}) span`).innerText.trim();
              return { code: txt, flag: txt.toLowerCase() };
         };
-        const t1 = getTeam(0);
-        const t2 = getTeam(1);
-
+        const t1 = getTeam(0); const t2 = getTeam(1);
+        const s1 = parseInt(bracket[mid].s1), s2 = parseInt(bracket[mid].s2);
+        
         let winner = null;
         if(!isNaN(s1) && !isNaN(s2)) {
             if(s1 > s2) winner = t1;
             else if(s2 > s1) winner = t2;
             else {
-                // Draw - Check Penalties
-                const p1 = parseInt(bracket[mid].p1);
-                const p2 = parseInt(bracket[mid].p2);
-                if(!isNaN(p1) && !isNaN(p2)) {
-                    if(p1 > p2) winner = t1;
-                    else if(p2 > p1) winner = t2;
-                }
+                const p1 = parseInt(bracket[mid].p1), p2 = parseInt(bracket[mid].p2);
+                if(!isNaN(p1) && !isNaN(p2)) winner = p1 > p2 ? t1 : t2;
             }
         }
         
         bracket[mid].winner = winner;
         save(KEY_KNOCKOUT, bracket);
-        // Trigger celebration if it's the Final (R2-0)
-        if(mid === "R2-0" && winner) {
-            celebrate(winner);
-        }
-        // Re-render to show penalties if draw, or update next rounds
-        // We use a slight debounce or just re-render immediately (simplest)
-        // To keep focus, we might lose it if we re-render HTML. 
-        // Better UX: Save state, but only re-render if necessary (like draw state changed).
-        // For simplicity in this engine: Re-render, but verify focus? 
-        // Actually, re-rendering kills focus. We will re-render ONLY if it's a draw to show pen inputs, 
-        // or if we need to update the *next* round.
-        // For this version: We re-render. It might click out, but it ensures correctness.
+
+        if(mid === "R2-0" && winner) celebrate(winner);
+
+        // --- SCROLL FIX START ---
+        // Capture current scroll positions
+        const wrapper = document.querySelector('.bracket-wrapper');
+        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+        const wrapperX = wrapper ? wrapper.scrollLeft : 0;
+        const wrapperY = wrapper ? wrapper.scrollTop : 0;
+
+        // Re-render the bracket
         initKnockout(); 
-        
-        // Restore focus hack (optional)
-        const newInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx || ''}"][data-pidx="${el.dataset.pidx || ''}"]`);
-        if(newInput) {
-            newInput.focus();
-            newInput.value = el.value; // ensure value persists visually
+
+        // Restore scroll positions immediately
+        window.scrollTo(scrollX, scrollY);
+        if(wrapper) {
+            wrapper.scrollLeft = wrapperX;
+            wrapper.scrollTop = wrapperY;
+        }
+        // --- SCROLL FIX END ---
+
+        // Restore Focus to the input you were typing in
+        const nextInput = document.querySelector(`input[data-mid="${mid}"][data-idx="${el.dataset.idx||''}"][data-pidx="${el.dataset.pidx||''}"]`);
+        if(nextInput) { 
+            nextInput.focus(); 
+            // set selection range to end to prevent cursor jumping to start
+            const val = nextInput.value;
+            nextInput.value = '';
+            nextInput.value = val;
         }
     };
 
@@ -588,4 +588,5 @@ const initKnockout = () => {
         saveAndGo: (u) => location.href=u,
         finalizeGroups: () => location.href="knockout.html"
     };
+
 })();
