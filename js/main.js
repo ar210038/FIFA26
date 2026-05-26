@@ -39,37 +39,41 @@ const app = (() => {
         "AU": {name: "Australia", flag: "au"}, "QA": {name: "Qatar", flag: "qa"}, "SA": {name: "Saudi Arabia", flag: "sa"},
         "UZ": {name: "Uzbekistan", flag: "uz"}, "JO": {name: "Jordan", flag: "jo"}, "IQ": {name: "Iraq", flag: "iq"},
 
+
         // OFC
         "NZ": {name: "New Zealand", flag: "nz"}, "NC": {name: "New Caledonia", flag: "nc"}
     };
 
     const INITIAL_GROUPS = {
-        "A": ["MX", "ZA", "KR", "Q_PathD"],
-        "B": ["CA", "Q_PathA", "QA", "CH"],
+        "A": ["MX", "ZA", "KR", "CZ"],
+        "B": ["CA", "BA", "QA", "CH"],
         "C": ["BR", "MA", "HT", "GB-SCT"],
-        "D": ["US", "PY", "AU", "Q_PathC"],
+        "D": ["US", "PY", "AU", "TR"],
         "E": ["DE", "CW", "CI", "EC"],
-        "F": ["NL", "JP", "Q_PathB", "TN"],
+        "F": ["NL", "JP", "SE", "TN"],
         "G": ["BE", "EG", "IR", "NZ"],
         "H": ["ES", "CV", "SA", "UY"],
-        "I": ["FR", "SN", "Q_IC2", "NO"],
+        "I": ["FR", "SN", "IQ", "NO"],
         "J": ["AR", "DZ", "AT", "JO"],
-        "K": ["PT", "Q_IC1", "UZ", "CO"],
+        "K": ["PT", "CD", "UZ", "CO"],
         "L": ["GB-ENG", "HR", "GH", "PA"]
     };
 
-    const QUALIFIER_PATHS = [
-        { id: "Q_PathA", name: "UEFA Path A", options: [{code: "IT", name: "Italy", flag: "it"}, {code: "GB-NIR", name: "N. Ireland", flag: "gb-nir"}, {code: "GB-WLS", name: "Wales", flag: "gb-wls"}, {code: "BA", name: "Bosnia", flag: "ba"}]},
-        { id: "Q_PathB", name: "UEFA Path B", options: [{code: "UA", name: "Ukraine", flag: "ua"}, {code: "SE", name: "Sweden", flag: "se"}, {code: "PL", name: "Poland", flag: "pl"}, {code: "AL", name: "Albania", flag: "al"}]},
-        { id: "Q_PathC", name: "UEFA Path C", options: [{code: "TR", name: "Türkiye", flag: "tr"}, {code: "RO", name: "Romania", flag: "ro"}, {code: "SK", name: "Slovakia", flag: "sk"}, {code: "XK", name: "Kosovo", flag: "xk"}]},
-        { id: "Q_PathD", name: "UEFA Path D", options: [{code: "DK", name: "Denmark", flag: "dk"}, {code: "MK", name: "N. Macedonia", flag: "mk"}, {code: "CZ", name: "Czechia", flag: "cz"}, {code: "IE", name: "Ireland", flag: "ie"}]},
-        { id: "Q_IC1", name: "Interconfed 1", options: [{code: "NC", name: "New Caledonia", flag: "nc"}, {code: "JM", name: "Jamaica", flag: "jm"}, {code: "CD", name: "DR Congo", flag: "cd"}]},
-        { id: "Q_IC2", name: "Interconfed 2", options: [{code: "BO", name: "Bolivia", flag: "bo"}, {code: "SR", name: "Suriname", flag: "sr"}, {code: "IQ", name: "Iraq", flag: "iq"}]}
-    ];
 
-    const KEY_QUALS = "wc26_qualifiers";
     const KEY_SCORES = "wc26_group_scores";
     const KEY_KNOCKOUT = "wc26_knockout";
+
+    const R32_STRUCTURE = [
+        {id: 1,  h: "2A", a: "2B"}, {id: 2,  h: "1K", a: "2L"}, 
+        {id: 3,  h: "1C", a: "3F"}, {id: 4,  h: "1F", a: "2C"},
+        {id: 5,  h: "1E", a: "2D"}, {id: 6,  h: "1I", a: "3G"},
+        {id: 7,  h: "1G", a: "3A"}, {id: 8,  h: "2H", a: "2J"},
+        {id: 9,  h: "1A", a: "3C"}, {id: 10, h: "2I", a: "2K"},
+        {id: 11, h: "1L", a: "3H"}, {id: 12, h: "1D", a: "3B"},
+        {id: 13, h: "1J", a: "2E"}, {id: 14, h: "1B", a: "3E"},
+        {id: 15, h: "1H", a: "2F"}, {id: 16, h: "2G", a: "3I"} 
+    ];
+
 
     // --- UTILS ---
     const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -82,12 +86,7 @@ const app = (() => {
     // --- SHARED CALCULATION LOGIC ---
     const calculateAllStandings = () => {
         const scores = load(KEY_SCORES) || {};
-        const qualifiers = load(KEY_QUALS) || {};
         const groupData = JSON.parse(JSON.stringify(INITIAL_GROUPS));
-        
-        for(let g in groupData) {
-            groupData[g] = groupData[g].map(t => qualifiers[t]?.code || t);
-        }
 
         const standings = {};
         const thirds = [];
@@ -96,8 +95,8 @@ const app = (() => {
         Object.keys(groupData).forEach(gName => {
             const teams = groupData[gName].map(t => ({ 
                 code: t, 
-                name: TEAMS_DB[t]?.name || qualifiers[t]?.name || t, 
-                flag: TEAMS_DB[t]?.flag || qualifiers[t]?.code || t,
+                name: TEAMS_DB[t]?.name || t, 
+                flag: TEAMS_DB[t]?.flag || t,
                 pts:0, gd:0, gf:0, w:0, d:0, l:0, p:0
             }));
 
@@ -131,64 +130,21 @@ const app = (() => {
         return { standings, thirds, allGroups };
     };
 
-    // --- QUALIFIERS ---
-    const initQualifiers = () => {
-        const container = document.getElementById('qualifiers-container');
-        if(!container) return;
-        const saved = load(KEY_QUALS) || {};
-        container.innerHTML = QUALIFIER_PATHS.map(path => `
-            <div class="card">
-                <h3>${path.name}</h3>
-                <div class="radio-group">
-                    ${path.options.map(opt => `
-                        <label>
-                            <input type="radio" name="${path.id}" value="${opt.code}|${opt.name}" 
-                                ${saved[path.id]?.code === opt.code ? 'checked' : ''} onchange="app.saveQualifiers()">
-                            <img src="${getFlag(opt.flag)}" class="flag" style="margin-right:8px"> ${opt.name}
-                        </label>
-                    `).join('')}
-                </div>
-            </div>`).join('');
-    };
-
-    const saveQualifiers = () => {
-        const inputs = document.querySelectorAll('input[type=radio]:checked');
-        const data = {};
-        inputs.forEach(i => {
-            const [code, name] = i.value.split('|');
-            data[i.name] = { code, name };
-        });
-        save(KEY_QUALS, data);
-    };
-
-    const randomizeQualifiers = () => {
-        QUALIFIER_PATHS.forEach(path => {
-            const opts = path.options;
-            const winner = opts[Math.floor(Math.random() * opts.length)];
-            const val = `${winner.code}|${winner.name}`;
-            const rad = document.querySelector(`input[name="${path.id}"][value="${val}"]`);
-            if(rad) rad.checked = true;
-        });
-        saveQualifiers();
-    };
-
     // --- GROUPS ---
     const initGroups = () => {
         const grid = document.getElementById('groups-grid');
         if(!grid) return;
         
         const scores = load(KEY_SCORES) || {};
-        const qualifiers = load(KEY_QUALS) || {};
         const groupData = JSON.parse(JSON.stringify(INITIAL_GROUPS));
-        for(let g in groupData) groupData[g] = groupData[g].map(t => qualifiers[t]?.code || t);
 
         let html = '';
         Object.keys(groupData).forEach(gName => {
             const teams = groupData[gName];
             const pairs = [[0,1], [2,3], [0,2], [1,3], [0,3], [1,2]];
             let fixtureHtml = pairs.map((pair, idx) => {
-                const t1 = TEAMS_DB[teams[pair[0]]] || qualifiers[teams[pair[0]]] || {name: teams[pair[0]], flag: "TBD"};
-                const t2 = TEAMS_DB[teams[pair[1]]] || qualifiers[teams[pair[1]]] || {name: teams[pair[1]], flag: "TBD"};
+                const t1 = TEAMS_DB[teams[pair[0]]] || {name: teams[pair[0]], flag: "TBD"};
+                const t2 = TEAMS_DB[teams[pair[1]]] || {name: teams[pair[1]], flag: "TBD"};
                 const id = `${gName}-${idx}`;
                 const s1 = scores[id]?.s1 !== undefined ? scores[id].s1 : '';
                 const s2 = scores[id]?.s2 !== undefined ? scores[id].s2 : '';
@@ -261,19 +217,8 @@ const app = (() => {
         updateGroups();
     };
 
-    // --- KNOCKOUT ---
-    const R32_STRUCTURE = [
-        {id: 1,  h: "2A", a: "2B"}, {id: 2,  h: "1K", a: "2L"}, 
-        {id: 3,  h: "1C", a: "3F"}, {id: 4,  h: "1F", a: "2C"},
-        {id: 5,  h: "1E", a: "2D"}, {id: 6,  h: "1I", a: "3G"},
-        {id: 7,  h: "1G", a: "3A"}, {id: 8,  h: "2H", a: "2J"},
-        {id: 9,  h: "1A", a: "3C"}, {id: 10, h: "2I", a: "2K"},
-        {id: 11, h: "1L", a: "3H"}, {id: 12, h: "1D", a: "3B"},
-        {id: 13, h: "1J", a: "2E"}, {id: 14, h: "1B", a: "3E"},
-        {id: 15, h: "1H", a: "2F"}, {id: 16, h: "2G", a: "3I"} 
-    ];
-// 1. GENERATE BRACKET HTML (Runs ONCE on load)
-    const initKnockout = () => {
+    // --- KNOCKOUT STAGES ---
+    const initKnockoutR32 = () => {
         const root = document.getElementById('bracket-root');
         if(!root) return;
 
@@ -306,7 +251,55 @@ const app = (() => {
         // ---------------------
 
         const bracketData = load(KEY_KNOCKOUT) || {};
-        const rounds = [32, 16, 8, 4, 2];
+        let html = `<div class="r32-columns">`;
+
+        // Create two columns with 8 matches each
+        for(let col = 0; col < 2; col++) {
+            html += `<div class="r32-column">
+            <table class="r32-table">
+                <tbody>`;
+
+            for(let i = col * 8; i < (col + 1) * 8; i++) {
+                let mId = `R32-${i}`;
+                let match = bracketData[mId] || {};
+                
+                const setup = R32_STRUCTURE[i];
+                const t1 = getT(setup.h);
+                const t2 = getT(setup.a);
+
+                const s1 = match.s1||'';
+                const s2 = match.s2||'';
+
+                html += `
+                <tr data-mid="${mId}" class="match-row">
+                    <td class="match-col">M${i+1}</td>
+                    <td class="team-col">
+                        <img src="${getFlag(t1.flag)}" class="flag"> ${t1.name || t1.code}
+                    </td>
+                    <td class="score-col">
+                        <input type="number" class="r32-score" data-mid="${mId}" data-idx="1" value="${s1}" oninput="app.updateKnockout(this)">
+                        <span>-</span>
+                        <input type="number" class="r32-score" data-mid="${mId}" data-idx="2" value="${s2}" oninput="app.updateKnockout(this)">
+                    </td>
+                    <td class="team-col">
+                        ${t2.name || t2.code} <img src="${getFlag(t2.flag)}" class="flag">
+                    </td>
+                </tr>`;
+            }
+
+            html += `</tbody></table></div>`;
+        }
+
+        html += `</div>`;
+        root.innerHTML = html;
+    };
+
+    const initKnockoutFinals = () => {
+        const root = document.getElementById('bracket-root');
+        if(!root) return;
+
+        const bracketData = load(KEY_KNOCKOUT) || {};
+        const rounds = [16, 8, 4, 2];
         let html = '';
 
         rounds.forEach((cnt) => {
@@ -316,29 +309,16 @@ const app = (() => {
                 let mId = `R${cnt}-${i}`;
                 let match = bracketData[mId] || {};
                 
-                // Initial load logic (Visuals updated later by refreshVisuals)
-                let t1, t2;
-                if(cnt === 32) {
-                    const setup = R32_STRUCTURE[i];
-                    t1 = getT(setup.h);
-                    t2 = getT(setup.a);
-                } else {
-                    t1 = {code: "Match "+(i*2+1), flag: "TBD"};
-                    t2 = {code: "Match "+(i*2+2), flag: "TBD"};
-                }
+                let t1 = {code: "Match "+(i*2+1), flag: "TBD"};
+                let t2 = {code: "Match "+(i*2+2), flag: "TBD"};
 
                 const s1 = match.s1||'', s2 = match.s2||'', p1 = match.p1||'', p2 = match.p2||'';
                 const isDraw = (s1 !== '' && s2 !== '' && s1 == s2);
                 
-                // HTML Structure
-                const title = cnt === 2 ? "<h3>🏆 WORLD CUP FINAL 🏆</h3>" : "";
-                const wrapperClass = cnt === 2 ? "final-match-wrapper" : "matchup";
-                
-                // Note: We use 'final-match-wrapper' as a wrapper DIV for the final, but standard 'matchup' class for others
                 if(cnt === 2) {
                     html += `
                     <div class="final-match-wrapper">
-                        ${title}
+                        <h3>🏆 WORLD CUP FINAL 🏆</h3>
                         <div class="matchup" data-mid="${mId}">
                             ${generateMatchHTML(mId, t1, t2, s1, s2, p1, p2, isDraw)}
                         </div>
@@ -351,7 +331,6 @@ const app = (() => {
                 }
             }
 
-            // 3rd Place Match (Under Final)
             if(cnt === 2) {
                 const m3 = bracketData["Match3rd"] || {};
                 const s3_1=m3.s1||'', s3_2=m3.s2||'', p3_1=m3.p1||'', p3_2=m3.p2||'';
@@ -368,8 +347,9 @@ const app = (() => {
             html += `</div>`;
         });
         root.innerHTML = html;
-        refreshVisuals(); // Update names/flags without breaking focus
+        refreshVisuals();
     };
+
 
     // Helper for initKnockout to keep code clean
     const generateMatchHTML = (mid, t1, t2, s1, s2, p1, p2, isDraw) => {
@@ -499,7 +479,7 @@ const app = (() => {
     const resetAll = () => { if(confirm("Reset Tournament?")) { localStorage.clear(); location.href="index.html"; } };
     const resetGroups = () => { localStorage.removeItem(KEY_SCORES); location.reload(); };
     const downloadJSON = () => {
-        const d = { q: load(KEY_QUALS), g: load(KEY_SCORES), k: load(KEY_KNOCKOUT) };
+        const d = { g: load(KEY_SCORES), k: load(KEY_KNOCKOUT) };
         const b = new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
         const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='wc26.json'; a.click();
     };
@@ -551,10 +531,9 @@ const app = (() => {
         setTimeout(() => { overlay.classList.remove('active'); overlay.innerHTML=''; }, 5000);
     };
     return {
-        initQualifiers, saveQualifiers, randomizeQualifiers,
         initGroups, updateGroups, randomizeGroups, resetGroups,
-        initKnockout, updateKnockout, resetAll, downloadJSON, downloadImage,
+        initKnockoutR32, initKnockoutFinals, updateKnockout, resetAll, downloadJSON, downloadImage,
         saveAndGo: (u) => location.href=u,
-        finalizeGroups: () => location.href="knockout.html"
+        finalizeGroups: () => location.href="knockout-r32.html"
     };
 })();
