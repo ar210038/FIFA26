@@ -219,86 +219,115 @@ const app = (() => {
 
     // --- KNOCKOUT STAGES ---
     const initKnockoutR32 = () => {
-        const root = document.getElementById('bracket-root');
-        if(!root) return;
+    const root = document.getElementById('bracket-root');
+    if(!root) return;
 
-        const { standings, thirds } = calculateAllStandings();
-        
-        // --- BEST 3RD LOGIC ---
-        const best8 = thirds.slice(0, 8);
-        const thirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
-        const thirdMap = {};
-        const assignedTeams = new Set();
-        const filledSlots = new Set();
+    const { standings, thirds } = calculateAllStandings();
+    
+    const best8 = thirds.slice(0, 8);
+    const thirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
+    const thirdMap = {};
+    const assignedTeams = new Set();
+    const filledSlots = new Set();
 
-        best8.forEach(team => {
-            const key = "3" + team.group;
-            if(thirdSlots.includes(key)) {
-                thirdMap[key] = team;
-                assignedTeams.add(team.group);
-                filledSlots.add(key);
-            }
-        });
-        const remainingTeams = best8.filter(t => !assignedTeams.has(t.group));
-        const remainingSlots = thirdSlots.filter(s => !filledSlots.has(s));
-        remainingSlots.forEach((slot, idx) => { if(remainingTeams[idx]) thirdMap[slot] = remainingTeams[idx]; });
+    best8.forEach(team => {
+        const key = "3" + team.group;
+        if(thirdSlots.includes(key)) {
+            thirdMap[key] = team;
+            assignedTeams.add(team.group);
+            filledSlots.add(key);
+        }
+    });
+    const remainingTeams = best8.filter(t => !assignedTeams.has(t.group));
+    const remainingSlots = thirdSlots.filter(s => !filledSlots.has(s));
+    remainingSlots.forEach((slot, idx) => { if(remainingTeams[idx]) thirdMap[slot] = remainingTeams[idx]; });
 
-        const getT = (key) => {
-            if(!key) return {code: "TBD", name:"TBD", flag: "TBD"};
-            if(key.startsWith('3')) return thirdMap[key] || {code: "TBD", name:"TBD", flag: "TBD"};
-            return standings[key] || {code: "TBD", name: "TBD", flag: "TBD"};
-        };
-        // ---------------------
+    const getT = (key) => {
+        if(!key) return {code: "TBD", name:"TBD", flag: "TBD"};
+        if(key.startsWith('3')) return thirdMap[key] || {code: "TBD", name:"TBD", flag: "TBD"};
+        return standings[key] || {code: "TBD", name: "TBD", flag: "TBD"};
+    };
 
-        const bracketData = load(KEY_KNOCKOUT) || {};
-        let html = `<div class="r32-columns">`;
+    const bracketData = load(KEY_KNOCKOUT) || {};
+    let html = `<div class="r32-columns">`;
 
-        // Create two columns with 8 matches each
-        for(let col = 0; col < 2; col++) {
-            html += `<div class="r32-column">
-            <table class="r32-table">
-                <tbody>`;
+    for(let col = 0; col < 2; col++) {
+        html += `<div class="r32-column">`;
 
-            for(let i = col * 8; i < (col + 1) * 8; i++) {
-                let mId = `R32-${i}`;
-                let match = bracketData[mId] || {};
-                
-                const setup = R32_STRUCTURE[i];
-                const t1 = getT(setup.h);
-                const t2 = getT(setup.a);
+        for(let i = col * 8; i < (col + 1) * 8; i++) {
+            let mId = `R32-${i}`;
+            let match = bracketData[mId] || {};
 
-                const s1 = match.s1||'';
-                const s2 = match.s2||'';
+            const setup = R32_STRUCTURE[i];
+            const t1 = getT(setup.h);
+            const t2 = getT(setup.a);
 
-                html += `
-                <tr data-mid="${mId}" class="match-row">
-                    <td class="match-col">M${i+1}</td>
-                    <td class="team-col">
-                        <img src="${getFlag(t1.flag)}" class="flag"> ${t1.name || t1.code}
-                    </td>
-                    <td class="score-col">
-                        <input type="number" class="r32-score" data-mid="${mId}" data-idx="1" value="${s1}" oninput="app.updateKnockout(this)">
-                        <span>-</span>
-                        <input type="number" class="r32-score" data-mid="${mId}" data-idx="2" value="${s2}" oninput="app.updateKnockout(this)">
-                    </td>
-                    <td class="team-col">
-                        ${t2.name || t2.code} <img src="${getFlag(t2.flag)}" class="flag">
-                    </td>
-                </tr>`;
-            }
+            const s1 = match.s1 || '';
+            const s2 = match.s2 || '';
+            const p1 = match.p1 || '';
+            const p2 = match.p2 || '';
+            const isDraw = (s1 !== '' && s2 !== '' && s1 == s2);
 
-            html += `</tbody></table></div>`;
+            html += `
+            <div class="matchup" data-mid="${mId}" style="margin-bottom:10px;">
+                <div style="font-size:0.7em; opacity:0.5; padding: 2px 4px;">M${i+1}</div>
+                ${generateMatchHTML(mId,
+                    {code: t1.name || t1.code, flag: t1.flag},
+                    {code: t2.name || t2.code, flag: t2.flag},
+                    s1, s2, p1, p2, isDraw)}
+            </div>`;
         }
 
         html += `</div>`;
-        root.innerHTML = html;
-    };
+    }
+
+    html += `</div>`;
+    root.innerHTML = html;
+    refreshVisuals();
+};
 
     const initKnockoutFinals = () => {
         const root = document.getElementById('bracket-root');
         if(!root) return;
 
         const bracketData = load(KEY_KNOCKOUT) || {};
+        const { standings, thirds } = calculateAllStandings();
+
+        const getThirdPlace = (groupCode) => thirds.find(t => t.group === groupCode);
+        const getTeamBySlot = (slot) => {
+            if(!slot) return { code: "TBD", flag: "TBD" };
+            if(slot.startsWith('3')) {
+                const team = getThirdPlace(slot.slice(1));
+                return team ? { code: team.name, flag: team.flag } : { code: "TBD", flag: "TBD" };
+            }
+            const team = standings[slot];
+            return team ? { code: team.name, flag: team.flag } : { code: "TBD", flag: "TBD" };
+        };
+
+        const resolveWinner = (match) => {
+            if(!match || match.s1 === undefined || match.s2 === undefined) return null;
+            const s1 = parseInt(match.s1);
+            const s2 = parseInt(match.s2);
+            if(isNaN(s1) || isNaN(s2)) return null;
+            if(s1 > s2) return 0;
+            if(s2 > s1) return 1;
+            const p1 = parseInt(match.p1);
+            const p2 = parseInt(match.p2);
+            if(!isNaN(p1) && !isNaN(p2)) return p1 > p2 ? 0 : p2 > p1 ? 1 : null;
+            return null;
+        };
+
+        const getR32Winner = (index) => {
+            const match = bracketData[`R32-${index}`] || {};
+            const winner = resolveWinner(match);
+            if(winner === null) return null;
+            const setup = R32_STRUCTURE[index];
+            const teamH = getTeamBySlot(setup.h);
+            const teamA = getTeamBySlot(setup.a);
+            return winner === 0 ? teamH : teamA;
+        };
+
+        const r32Winners = Array.from({ length: 16 }, (_, i) => getR32Winner(i));
         const rounds = [16, 8, 4, 2];
         let html = '';
 
@@ -308,9 +337,16 @@ const app = (() => {
             for(let i=0; i<matchCount; i++) {
                 let mId = `R${cnt}-${i}`;
                 let match = bracketData[mId] || {};
-                
+
                 let t1 = {code: "Match "+(i*2+1), flag: "TBD"};
                 let t2 = {code: "Match "+(i*2+2), flag: "TBD"};
+
+                if(cnt === 16) {
+                    const winnerA = r32Winners[i*2];
+                    const winnerB = r32Winners[i*2 + 1];
+                    if(winnerA) t1 = winnerA;
+                    if(winnerB) t2 = winnerB;
+                }
 
                 const s1 = match.s1||'', s2 = match.s2||'', p1 = match.p1||'', p2 = match.p2||'';
                 const isDraw = (s1 !== '' && s2 !== '' && s1 == s2);
@@ -372,24 +408,40 @@ const app = (() => {
 
     // 2. LIVE UPDATER (Does not rebuild HTML, keeps keyboard open)
     const updateKnockout = (el) => {
-        const mid = el.dataset.mid;
-        const bracket = load(KEY_KNOCKOUT) || {};
-        if(!bracket[mid]) bracket[mid] = {};
-        
-        if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
-        if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
-        if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
-        if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
+    const mid = el.dataset.mid;
+    const bracket = load(KEY_KNOCKOUT) || {};
+    if(!bracket[mid]) bracket[mid] = {};
+    
+    if(el.dataset.idx === "1") bracket[mid].s1 = el.value;
+    if(el.dataset.idx === "2") bracket[mid].s2 = el.value;
+    if(el.dataset.pidx === "1") bracket[mid].p1 = el.value;
+    if(el.dataset.pidx === "2") bracket[mid].p2 = el.value;
 
-        // Calc Winner for Celebration
-        const s1 = parseInt(bracket[mid].s1), s2 = parseInt(bracket[mid].s2);
-        if(mid === "R2-0" && !isNaN(s1) && !isNaN(s2) && s1 !== s2) {
-             // Simple celebration trigger (text updates via UI)
-             celebrate({code: "CHAMPION"}); 
+    save(KEY_KNOCKOUT, bracket);
+    refreshVisuals();
+
+    // Celebration — runs AFTER refreshVisuals so winner span is up to date
+    if(mid === "R2-0") {
+        const s1 = parseInt(bracket[mid].s1);
+        const s2 = parseInt(bracket[mid].s2);
+        const p1 = parseInt(bracket[mid].p1);
+        const p2 = parseInt(bracket[mid].p2);
+
+        let winnerSlot = -1;
+        if(!isNaN(s1) && !isNaN(s2)) {
+            if(s1 > s2) winnerSlot = 0;
+            else if(s2 > s1) winnerSlot = 1;
+            else if(!isNaN(p1) && !isNaN(p2) && p1 !== p2) winnerSlot = p1 > p2 ? 0 : 1;
         }
 
-        save(KEY_KNOCKOUT, bracket);
-        refreshVisuals(); // Update text/colors only
+        if(winnerSlot !== -1) {
+            const finalDiv = document.querySelector('div[data-mid="R2-0"]');
+            if(finalDiv) {
+                const winnerSpan = finalDiv.querySelectorAll('.team-slot')[winnerSlot].querySelector('span');
+                celebrate({ html: winnerSpan.innerHTML });
+                }
+            }
+        }
     };
 
     // 3. VISUAL REFRESHER (Updates DOM attributes only)
@@ -510,25 +562,29 @@ const app = (() => {
     };
     // Add this helper function
     const celebrate = (team) => {
-        let overlay = document.getElementById('celebration-overlay');
-        if(!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'celebration-overlay';
-            document.body.appendChild(overlay);
-        }
-        overlay.innerHTML = `<div class="winner-text">🏆 WORLD CHAMPION 🏆<br>${team.code}</div>`;
-        overlay.classList.add('active');
-        
-        // Confetti logic
-        for(let i=0; i<100; i++) {
-            const c = document.createElement('div');
-            c.className = 'confetti';
-            c.style.left = Math.random()*100 + '%';
-            c.style.animationDuration = (Math.random()*3+2) + 's';
-            c.style.backgroundColor = `hsl(${Math.random()*360}, 100%, 50%)`;
-            overlay.appendChild(c);
-        }
-        setTimeout(() => { overlay.classList.remove('active'); overlay.innerHTML=''; }, 5000);
+    let overlay = document.getElementById('celebration-overlay');
+    if(!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'celebration-overlay';
+        document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+        <div class="winner-text">
+            🏆 WORLD CHAMPION 🏆
+            <div class="winner-team">${team.html || team.code}</div>
+        </div>`;
+    overlay.classList.add('active');
+
+    for(let i = 0; i < 100; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = Math.random() * 100 + '%';
+        c.style.animationDuration = (Math.random() * 3 + 2) + 's';
+        c.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        overlay.appendChild(c);
+    }
+    setTimeout(() => { overlay.classList.remove('active'); overlay.innerHTML = ''; }, 5000);
     };
     return {
         initGroups, updateGroups, randomizeGroups, resetGroups,
