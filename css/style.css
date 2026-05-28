@@ -679,9 +679,27 @@ body {
         -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
     }
     
+
+}
     /* 6. Celebration Text Fit */
     .winner-text {
         font-size: 3rem;
         padding: 0 20px;
     }
-}
+    .winner-text .winner-team {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 2rem;
+    font-weight: 900;
+    margin-top: 12px;
+    letter-spacing: 2px;
+    }
+
+    .winner-text .winner-team img.flag {
+        width: 60px;
+        height: auto;
+        border-radius: 4px;
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    }
