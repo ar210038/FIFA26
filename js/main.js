@@ -63,16 +63,27 @@ const app = (() => {
     const KEY_SCORES = "wc26_group_scores";
     const KEY_KNOCKOUT = "wc26_knockout";
 
+    // Corrected Round-of-32 matchups using your provided R32_SLOTS mapping (73–88)
     const R32_STRUCTURE = [
-        {id: 1,  h: "2A", a: "2B"}, {id: 2,  h: "1K", a: "2L"}, 
-        {id: 3,  h: "1C", a: "3F"}, {id: 4,  h: "1F", a: "2C"},
-        {id: 5,  h: "1E", a: "2D"}, {id: 6,  h: "1I", a: "3G"},
-        {id: 7,  h: "1G", a: "3A"}, {id: 8,  h: "2H", a: "2J"},
-        {id: 9,  h: "1A", a: "3C"}, {id: 10, h: "2I", a: "2K"},
-        {id: 11, h: "1L", a: "3H"}, {id: 12, h: "1D", a: "3B"},
-        {id: 13, h: "1J", a: "2E"}, {id: 14, h: "1B", a: "3E"},
-        {id: 15, h: "1H", a: "2F"}, {id: 16, h: "2G", a: "3I"} 
+        // 73–88 mapping converted to our 16 match indexes (1..16)
+        {id: 1,  h: "2A", a: "2B"},
+        {id: 2,  h: "1E", a: "3ABCDF"},   // 3rd best from A/B/C/D/F
+        {id: 3,  h: "1F", a: "2C"},
+        {id: 4,  h: "1C", a: "2F"},
+        {id: 5,  h: "1I", a: "3CDFGH"},   // 3rd best from C/D/F/G/H
+        {id: 6,  h: "2E", a: "2I"},
+        {id: 7,  h: "1A", a: "3CEFHI"},   // 3rd best from C/E/F/H/I
+        {id: 8,  h: "1L", a: "3EHIJK"},   // 3rd best from E/H/I/J/K
+        {id: 9,  h: "1D", a: "3BEFIJ"},   // 3rd best from B/E/F/I/J
+        {id: 10, h: "1G", a: "3AEHIJ"},   // 3rd best from A/E/H/I/J
+        {id: 11, h: "2K", a: "2L"},
+        {id: 12, h: "1H", a: "2J"},       // FIXED: 1H vs 2J
+        {id: 13, h: "1B", a: "3EFGIJ"},   // FIXED: 1B vs 3EFGIJ
+        {id: 14, h: "1J", a: "2H"},
+        {id: 15, h: "1K", a: "3DEIJL"},   // 3rd best from D/E/I/J/L
+        {id: 16, h: "2D", a: "2G"}
     ];
+
 
 
     // --- UTILS ---
@@ -223,29 +234,63 @@ const app = (() => {
     if(!root) return;
 
     const { standings, thirds } = calculateAllStandings();
-    
-    const best8 = thirds.slice(0, 8);
-    const thirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
-    const thirdMap = {};
-    const assignedTeams = new Set();
-    const filledSlots = new Set();
 
-    best8.forEach(team => {
-        const key = "3" + team.group;
-        if(thirdSlots.includes(key)) {
-            thirdMap[key] = team;
-            assignedTeams.add(team.group);
-            filledSlots.add(key);
-        }
+    // --- Subset-based “best 3rd place from specific groups” support ---
+    // Input format example: 3ABCDF => 3rd best among the third-place teams from groups A,B,C,D,F
+    const groupThirdByCode = (groupCode) => thirds.find(t => t.group === groupCode);
+
+    const bestThirdFromGroups = (groupCodes) => {
+        const candidates = groupCodes
+            .map(g => groupThirdByCode(g))
+            .filter(Boolean);
+        candidates.sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+        return candidates.length ? candidates[0] : null; // not used currently
+    };
+
+    const thirdBestFromGroups = (groupCodes) => {
+        const candidates = groupCodes
+            .map(g => groupThirdByCode(g))
+            .filter(Boolean);
+        candidates.sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+        return candidates.length >= 3 ? candidates[2] : (candidates.length ? candidates[candidates.length-1] : null);
+    };
+
+    // For compatibility with existing rendering, we still prepare a lookup map for slot codes.
+    const thirdMap = {};
+
+    // Fill subset third-place identifiers used by your corrected R32_STRUCTURE.
+    const subsetKeys = [
+        "3ABCDF","3CDFGH","3CEFHI","3EHIJK","3BEFIJ","3AEHIJ","3DEIJL"
+    ];
+
+    const subsetDef = {
+        "3ABCDF": ["A","B","C","D","F"],
+        "3CDFGH": ["C","D","F","G","H"],
+        "3CEFHI": ["C","E","F","H","I"],
+        "3EHIJK": ["E","H","I","J","K"],
+        "3BEFIJ": ["B","E","F","I","J"],
+        "3AEHIJ": ["A","E","H","I","J"],
+        "3DEIJL": ["D","E","I","J","L"]
+    };
+
+    subsetKeys.forEach(key => {
+        const groups = subsetDef[key] || [];
+        const team = thirdBestFromGroups(groups);
+        if(team) thirdMap[key] = team;
     });
-    const remainingTeams = best8.filter(t => !assignedTeams.has(t.group));
-    const remainingSlots = thirdSlots.filter(s => !filledSlots.has(s));
-    remainingSlots.forEach((slot, idx) => { if(remainingTeams[idx]) thirdMap[slot] = remainingTeams[idx]; });
+
+    // Also keep old single-group third keys (3F,3G,3A,...) working for any remaining slots.
+    const legacyThirdSlots = ["3F", "3G", "3A", "3C", "3H", "3B", "3E", "3I"];
+    legacyThirdSlots.forEach(k => {
+        const g = k.slice(1);
+        const t = groupThirdByCode(g);
+        if(t) thirdMap[k] = t;
+    });
 
     const getT = (key) => {
         if(!key) return {code: "TBD", name:"TBD", flag: "TBD"};
         if(key.startsWith('3')) return thirdMap[key] || {code: "TBD", name:"TBD", flag: "TBD"};
-        return standings[key] || {code: "TBD", name: "TBD", flag: "TBD"};
+        return standings[key] || {code: "TBD", name:"TBD", flag: "TBD"};
     };
 
     const bracketData = load(KEY_KNOCKOUT) || {};
@@ -332,6 +377,7 @@ const app = (() => {
         let html = '';
 
         rounds.forEach((cnt) => {
+
             html += `<div class="round" id="round-${cnt}">`;
             const matchCount = cnt / 2;
             for(let i=0; i<matchCount; i++) {
